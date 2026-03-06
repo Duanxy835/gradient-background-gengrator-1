@@ -3,10 +3,13 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ColorWheel } from '@/components/ui/color-wheel';
 import { useGradientGenerator } from '@/hooks/useGradientGenerator';
 import { colorPresets } from '@/lib/constants';
 import { colorToParam } from '@/lib/utils';
+import { getRecommendedColorCombinations, getBestGradientColors } from '@/lib/services/colorRecommender';
 import { Download, RefreshCw, Plus, Trash2, Palette, Sparkles, Layers, Code, Zap } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
 export default function GradientGenerator() {
@@ -26,11 +29,37 @@ export default function GradientGenerator() {
   const [newColor, setNewColor] = useState('');
   const [apiLinkCopied, setApiLinkCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [colorMode, setColorMode] = useState<'free' | 'recommended'>('free');
+  const [wheelColor, setWheelColor] = useState(colors[0]);
+  const [recommendedColors, setRecommendedColors] = useState<string[]>([]);
 
   useEffect(() => {
     setMounted(true);
     generateGradient();
   }, [generateGradient]);
+
+  useEffect(() => {
+    if (colorMode === 'recommended') {
+      const combinations = getRecommendedColorCombinations(wheelColor);
+      setRecommendedColors([combinations.complementary, ...combinations.analogous]);
+    }
+  }, [wheelColor, colorMode]);
+
+  const handleColorModeChange = (mode: 'free' | 'recommended') => {
+    setColorMode(mode);
+    if (mode === 'recommended') {
+      const bestColors = getBestGradientColors(wheelColor, 2);
+      setColors(bestColors);
+    }
+  };
+
+  const handleWheelColorChange = (color: string) => {
+    setWheelColor(color);
+    if (colorMode === 'recommended') {
+      const bestColors = getBestGradientColors(color, 2);
+      setColors(bestColors);
+    }
+  };
 
   const handleColorChange = (index: number, color: string) => {
     const newColors = [...colors];
@@ -216,67 +245,135 @@ export default function GradientGenerator() {
                   <Palette className="w-5 h-5 text-primary" />
                   <h2 className="font-display font-semibold text-lg">Colors</h2>
                 </div>
-                <span className="text-xs font-mono bg-muted px-2 py-1 rounded-md text-muted-foreground">
-                  {colors.length}/8
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono bg-muted px-2 py-1 rounded-md text-muted-foreground">
+                    {colors.length}/8
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium">自由选择</span>
+                    <Switch 
+                      checked={colorMode === 'recommended'}
+                      onCheckedChange={(checked) => handleColorModeChange(checked ? 'recommended' : 'free')}
+                      className="w-10 h-5"
+                    />
+                    <span className="text-xs font-medium">推荐选择</span>
+                  </div>
+                </div>
               </div>
               
-              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                {colors.map((color, index) => (
-                  <div key={index} className="flex items-center gap-3 group">
-                    <div className="relative flex-shrink-0">
-                       <Input
-                        type="color"
-                        value={color}
-                        onChange={(e) => handleColorChange(index, e.target.value)}
-                        className="w-12 h-12 p-1 rounded-xl cursor-pointer border-2 hover:border-primary transition-colors"
-                      />
-                    </div>
-                    <Input
-                      type="text"
-                      value={color.toUpperCase()}
-                      onChange={(e) => handleColorChange(index, e.target.value)}
-                      className="font-mono text-sm tracking-wider uppercase"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeColor(index)}
-                      disabled={colors.length <= 1}
-                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+              {colorMode === 'free' ? (
+                <>
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    {colors.map((color, index) => (
+                      <div key={index} className="flex items-center gap-3 group">
+                        <div className="relative flex-shrink-0">
+                           <Input
+                            type="color"
+                            value={color}
+                            onChange={(e) => handleColorChange(index, e.target.value)}
+                            className="w-12 h-12 p-1 rounded-xl cursor-pointer border-2 hover:border-primary transition-colors"
+                          />
+                        </div>
+                        <Input
+                          type="text"
+                          value={color.toUpperCase()}
+                          onChange={(e) => handleColorChange(index, e.target.value)}
+                          className="font-mono text-sm tracking-wider uppercase"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeColor(index)}
+                          disabled={colors.length <= 1}
+                          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
 
-               {colors.length < 8 && (
-                <div className="flex items-center gap-3 pt-2">
-                   <div className="relative flex-shrink-0">
-                      <Input
-                        type="color"
-                        value={newColor || '#000000'}
-                        onChange={(e) => setNewColor(e.target.value)}
-                         className="w-12 h-12 p-1 rounded-xl cursor-pointer border-2 border-dashed border-muted-foreground/30 hover:border-primary transition-colors"
-                      />
-                   </div>
-                   <Input
-                      type="text"
-                      placeholder="#000000"
-                      value={newColor.toUpperCase()}
-                      onChange={(e) => setNewColor(e.target.value)}
-                      className="font-mono text-sm tracking-wider uppercase"
+                   {colors.length < 8 && (
+                    <div className="flex items-center gap-3 pt-2">
+                       <div className="relative flex-shrink-0">
+                          <Input
+                            type="color"
+                            value={newColor || '#000000'}
+                            onChange={(e) => setNewColor(e.target.value)}
+                             className="w-12 h-12 p-1 rounded-xl cursor-pointer border-2 border-dashed border-muted-foreground/30 hover:border-primary transition-colors"
+                          />
+                       </div>
+                       <Input
+                          type="text"
+                          placeholder="#000000"
+                          value={newColor ? newColor.toUpperCase() : ''}
+                          onChange={(e) => setNewColor(e.target.value)}
+                          className="font-mono text-sm tracking-wider uppercase"
+                        />
+                       <Button 
+                        onClick={addColor}
+                        disabled={!newColor}
+                        className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>
+                   )}
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col items-center gap-6">
+                    <div className="text-center mb-4">
+                      <p className="text-sm text-muted-foreground">选择一个基础颜色，系统会为您推荐最佳的颜色组合</p>
+                    </div>
+                    <ColorWheel 
+                      selectedColor={wheelColor}
+                      onColorChange={handleWheelColorChange}
+                      size={200}
                     />
-                   <Button 
-                    onClick={addColor}
-                    disabled={!newColor}
-                    className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-               )}
+                    <div className="w-full space-y-4">
+                      <div className="flex items-center gap-3">
+                        <Input
+                          type="color"
+                          value={wheelColor}
+                          onChange={(e) => handleWheelColorChange(e.target.value)}
+                          className="w-12 h-12 p-1 rounded-xl cursor-pointer border-2 hover:border-primary transition-colors"
+                        />
+                        <Input
+                          type="text"
+                          value={wheelColor.toUpperCase()}
+                          onChange={(e) => handleWheelColorChange(e.target.value)}
+                          className="font-mono text-sm tracking-wider uppercase flex-1"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">推荐颜色</h3>
+                        <div className="flex gap-3">
+                          {recommendedColors.map((color, index) => (
+                            <div 
+                              key={index}
+                              className="relative cursor-pointer"
+                              onClick={() => {
+                                setWheelColor(color);
+                                const bestColors = getBestGradientColors(color, 2);
+                                setColors(bestColors);
+                              }}
+                            >
+                              <div 
+                                className="w-12 h-12 rounded-xl border-2 border-border hover:border-primary transition-colors"
+                                style={{ backgroundColor: color }}
+                              />
+                              <span className="absolute -bottom-6 left-0 right-0 text-center text-xs font-mono text-muted-foreground">
+                                {color.toUpperCase()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Presets */}
